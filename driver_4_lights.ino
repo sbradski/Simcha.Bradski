@@ -20,45 +20,55 @@
   by Colby Newman
 */
 
-
 // constants won't change. They're used here to
 // set pin numbers:
-const int pinButtonState = 0;    // the number of the pushbutton pin
-const int pinButtonCamera = 8;   //button for the camera
-const int ledPin = 13;      // the number of the LED pin
+const int pinButtonState = 8; // the number of the pushbutton pin
+const int pinButtonCamera = 10; //button for the camera
+const int ledPin = 13; // the number of the LED pin
+//const int ledPin2 = 12; // led to tell what state you are in
+const int cameraShutter = 11;
+const int ledTR = 3;
+const int ledTL = 4;
+const int ledBR = 5;
+const int ledBL = 6;
+
+const int shutterLag = 50;
+const int shutterDelay = 100;
 const int ON = 1;
 const int OFF = 0;
-const int all = 10;           // all lights ON
-const int topright = 20;      // top right is ON
+const int all = 10; // all lights ON
+const int topright = 20; // top right is ON
 const int topleft = 30;
 const int bottomleft = 40;
 const int bottomright = 50;
+const int noShutter = 0; // there is no shutter
+const int oneShutter = 1; // manual shutter
+const int allShutter = 2; // sequence of lights and shutter
 
 // Variables will change:
-int ledState = HIGH;         // the current state of the output pin
-int buttonPinState;             // the current reading from the input pin
+int ledState = HIGH; // the current state of the output pin
+int buttonPinState; // the current reading from the input pin
 int buttonCameraState;
-int lastButtonPinState = LOW;   // the previous reading from the input pin
+int lastButtonPinState = LOW; // the previous reading from the input pin
 int lastButtonCameraState = LOW;
-int lightState;
-int clickState;
+int lightState = 0;
+int clickState = 0;
 
 // the following variables are unsigned long's because the time, measured in miliseconds,
 // will quickly become a bigger number than can be stored in an int.
-unsigned long lastStateDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long lastStateDebounceTime = 0; // the last time the output pin was toggled
 unsigned long lastCameraDebounceTime = 0;
-unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
+unsigned long debounceDelay = 50; // the debounce time; increase if the output flickers
 
 // the setup function runs once when you press reset or power the board
 void setup() {
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(3, OUTPUT);
-  pinMode(4, OUTPUT);
-  pinMode(5, OUTPUT);
-  pinMode(6, OUTPUT);
-  pinMode(9, OUTPUT);          //camera
-  pinMode(0, INPUT_PULLUP);    // button intup
+  pinMode(ledTR, OUTPUT);
+  pinMode(ledTL, OUTPUT);
+  pinMode(ledBR, OUTPUT);
+  pinMode(ledBL, OUTPUT);
+  pinMode(cameraShutter, OUTPUT); //camera shutter
   pinMode(pinButtonState, INPUT_PULLUP);
   pinMode(pinButtonCamera, INPUT_PULLUP);
 
@@ -77,7 +87,7 @@ void loop() {
 
   int reading;
 
-  reading = digitalRead(pinButtonCamera);
+  reading = digitalRead(pinButtonCamera);   //reading input pin
 
   // check to see if you just pressed the button
   // (i.e. the input went from LOW to HIGH),  and you've waited
@@ -97,13 +107,24 @@ void loop() {
       buttonCameraState = reading;
 
       // only toggle the LED if the new button state is HIGH
-      if (buttonCameraState == HIGH) {
-        ledState = !ledState;
-        camera_set(9);
-
+      if (clickState == allShutter) {
+        clickState = oneShutter;
+        Serial.println("allShutter");
       }
+      else if (clickState == oneShutter) {
+        clickState = noShutter;
+        Serial.println("oneShutter");
+      }
+      else if (clickState == noShutter) {
+        clickState = allShutter;
+        Serial.println("noShutter");
+      }
+      ledState = !ledState;
+      Serial.println("change cameraState");
+      // camera_set(cameraShutter);
     }
   }
+
 
   digitalWrite(ledPin, ledState);
 
@@ -128,71 +149,35 @@ void loop() {
     // if the button state has changed:
     if (reading != buttonPinState) {
       buttonPinState = reading;
+      Serial.println("stateButton");
 
       // only toggle the LED if the new button state is HIGH
       if (buttonPinState == HIGH) {
         ledState = !ledState;
 
-        if (lightState == all) {
-          led_set(3, ON);
-          led_set(4, ON);
-          led_set(5, ON);
-          led_set(6, ON);
-          if (clickState == ON) {
-            cameraClick();
-          }
-          Serial.println("State = all");
-          lightState = topright;
-        } else if (lightState == topright) {
-          led_set(3, ON);
-          led_set(4, OFF);
-          led_set(5, OFF);
-          led_set(6, OFF);
-          if (clickState == ON) {
-            cameraClick();
-          }
-          Serial.println("State = topright");
-          lightState = topleft;
-        } else if (lightState == topleft) {
-          led_set(3, OFF);
-          led_set(4, ON);
-          led_set(5, OFF);
-          led_set(6, OFF);
-          if (clickState == ON) {
-            cameraClick();
-          }
-          Serial.println("State = topleft");
-          lightState = bottomleft;
-        } else if (lightState == bottomleft) {
-          led_set(3, OFF);
-          led_set(4, OFF);
-          led_set(5, ON);
-          led_set(6, OFF);
-          if (clickState == ON) {
-            cameraClick();
-          }
-          Serial.print("State == bottomleft");
-          lightState = bottomright;
-        } else if (lightState == bottomright) {
-          led_set(3, OFF);
-          led_set(4, OFF);
-          led_set(5, OFF);
-          led_set(6, ON);
-          if (clickState == ON) {
-            cameraClick();
-          }
-          Serial.print("State == bottomright");
-          lightState = all;
+        if (clickState == allShutter) {
+          doAllStates();
+          Serial.println ("allShutterlol") ;
+        } else if (lightState == doAllLights) {
+          doAllLights();
+        } else if (lightState == doTRLights) {
+          doTRLights();
+        } else if (lightState == doTLLights) {
+          doTLLights();
+        } else if (lightState == doBRLights) {
+          doBRLights();
+        } else if (lightState == doBLLights) {
+          doBLLights();
         } else {
           lightState = all;
         }
       }
     }
-    //  digitalWrite(3, HIGH);
-    //  delay(1000);
-    //  cameraClick();
   }
 
+  //  digitalWrite(3, HIGH);
+  //  delay(1000);
+  //  cameraClick();
 
   // set the LED:
   digitalWrite(ledPin, ledState);
@@ -200,26 +185,116 @@ void loop() {
   // save the reading.  Next time through the loop,
   // it'll be the lastButtonState:
   lastButtonPinState = reading;
-
 }
-
 void cameraClick() {
-  Serial.println ("take my picture");
-  digitalWrite(1, HIGH);
-  digitalWrite(1, LOW);
+  digitalWrite(cameraShutter, LOW);
+  delay(shutterLag);
+  Serial.println("take my picture");
+  digitalWrite(cameraShutter, HIGH);
+  delay(shutterDelay);
+  digitalWrite(cameraShutter, LOW);
+  delay(shutterLag);
+
 }
 
 void led_set(uint8_t number, uint8_t setting) {
   if (setting == OFF) {
     digitalWrite(number, LOW);
-  } else
+  } else {
     digitalWrite(number, HIGH);
-
-}
-void camera_set(uint8_t number) {
-  digitalWrite(number, HIGH);
-  delay(3);
-  digitalWrite(number, LOW);
+  }
 }
 
+void doAllStates() {
+  doAllLights();
+  doTRLights();
+  doTLLights();
+  doBRLights();
+  doBLLights();
+}
+void doAllLights() {
+  led_set(ledTR, ON);
+  led_set(ledTL, ON);
+  led_set(ledBR, ON);
+  led_set(ledBL, ON);
+  if (clickState == ON) {
+    cameraClick();
+    Serial.println("click");
+  }
+  Serial.println("State = all");
+  lightState = topright;
+}
+
+void doTRLights() {
+  led_set(ledTR, ON);
+  led_set(ledTL, OFF);
+  led_set(ledBR, OFF);
+  led_set(ledBL, OFF);
+  if (clickState == ON) {
+    cameraClick();
+    Serial.println("click");
+  }
+  Serial.println("State = topright");
+  lightState = topleft;
+}
+
+void doTLLights() {
+  led_set(ledTR, OFF);
+  led_set(ledTL, ON);
+  led_set(ledBR, OFF);
+  led_set(ledBL, OFF);
+  if (clickState == ON) {
+    cameraClick();
+    Serial.println("click");
+  }
+  Serial.println("State = topleft");
+  lightState = bottomleft;
+}
+
+void doBRLights() {
+  led_set(ledTR, OFF);
+  led_set(ledTL, OFF);
+  led_set(ledBR, ON);
+  led_set(ledBL, OFF);
+  if (clickState == ON) {
+    cameraClick();
+    Serial.println("click");
+  }
+  Serial.print("State == bottomright");
+  lightState = bottomright;
+}
+
+void doBLLights() {
+  led_set(ledTR, OFF);
+  led_set(ledTL, OFF);
+  led_set(ledBR, OFF);
+  led_set(ledBL, ON);
+  if (clickState == ON) {
+    cameraClick();
+    Serial.println("click");
+  }
+  Serial.print("State == bottomright");
+  lightState = all;
+}
+
+/*
+int ledPin2 = 12;    //led connected to digital pin 12
+
+void setup2() {
+  pinMode(ledPin2, OUTPUT); 
+}
+
+void loop () {
+  if (clickState == allShutter){
+    digitalWrite(ledPin2, HIGH);             // light blinking quickly
+    digitalWrite(ledPin2, LOW);
+  }else if (clickState == oneShutter) {
+    digitalWrite(ledPin2, HIGH);
+    delay(400);                             //light blinking slowly
+    digitalWrite(ledPin2, LOW);
+  }else if (clickState == noShutter) {
+    digitalWrite(ledPin2, HIGH);                    //light always on
+  }
+}
+/*
 
