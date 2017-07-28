@@ -25,7 +25,6 @@
 const int pinButtonState = 8; // the number of the pushbutton pin
 const int pinButtonCamera = 10; //button for the camera
 const int ledPin = 13; // the number of the LED pin
-//const int ledPin2 = 12; // led to tell what state you are in
 const int cameraShutter = 11;
 const int ledTR = 3;
 const int ledTL = 4;
@@ -48,11 +47,12 @@ const int allShutter = 2; // sequence of lights and shutter
 // Variables will change:
 int ledState = HIGH; // the current state of the output pin
 int buttonPinState; // the current reading from the input pin
-int buttonCameraState;
+int buttonCameraState = LOW; //so it does not start w/out button click
 int lastButtonPinState = LOW; // the previous reading from the input pin
 int lastButtonCameraState = LOW;
 int lightState = 0;
 int clickState = 0;
+
 
 // the following variables are unsigned long's because the time, measured in miliseconds,
 // will quickly become a bigger number than can be stored in an int.
@@ -108,14 +108,18 @@ void loop() {
 
       // only toggle the LED if the new button state is HIGH
       if (clickState == allShutter) {
+        doAllStates();
         clickState = oneShutter;
         Serial.println("allShutter");
       }
+      
       else if (clickState == oneShutter) {
+       // doManually();
         clickState = noShutter;
         Serial.println("oneShutter");
       }
       else if (clickState == noShutter) {
+        doNoShutter();
         clickState = allShutter;
         Serial.println("noShutter");
       }
@@ -155,17 +159,21 @@ void loop() {
       if (buttonPinState == HIGH) {
         ledState = !ledState;
 
-        if (clickState == allShutter) {
+        if (clickState == oneShutter) {
           doAllStates();
           Serial.println ("allShutterlol") ;
         } else if (lightState == doAllLights) {
           doAllLights();
+          Serial.println("alllights");
         } else if (lightState == doTRLights) {
           doTRLights();
+          Serial.println("TRlights");
         } else if (lightState == doTLLights) {
           doTLLights();
+          Serial.println("TLlights");
         } else if (lightState == doBRLights) {
           doBRLights();
+          Serial.println("BRlights");
         } else if (lightState == doBLLights) {
           doBLLights();
         } else {
@@ -205,7 +213,35 @@ void led_set(uint8_t number, uint8_t setting) {
   }
 }
 
+
 void doAllStates() {
+  doAllLights();
+  //cameraClick();
+  delay(600);
+  clickState = ON; 
+  doTRLights();
+  delay(600);
+  doTLLights();
+  delay(600);
+  doBRLights();
+  delay(600);
+  doBLLights();
+}
+
+/*void doManually() {
+  doAllLights();
+  pinMode(pinButtonState, INPUT_PULLUP);
+  doTRLights();
+  pinMode(pinButtonState, INPUT_PULLUP);
+  doTLLights();
+  pinMode(pinButtonState, INPUT_PULLUP);
+  doBRLights();
+  pinMode(pinButtonState, INPUT_PULLUP);
+  doBLLights();
+}
+*/
+void doNoShutter() {
+  clickState = OFF;
   doAllLights();
   doTRLights();
   doTLLights();
@@ -217,6 +253,7 @@ void doAllLights() {
   led_set(ledTL, ON);
   led_set(ledBR, ON);
   led_set(ledBL, ON);
+  delay(500);
   if (clickState == ON) {
     cameraClick();
     Serial.println("click");
@@ -230,6 +267,7 @@ void doTRLights() {
   led_set(ledTL, OFF);
   led_set(ledBR, OFF);
   led_set(ledBL, OFF);
+  delay (500);
   if (clickState == ON) {
     cameraClick();
     Serial.println("click");
@@ -243,6 +281,7 @@ void doTLLights() {
   led_set(ledTL, ON);
   led_set(ledBR, OFF);
   led_set(ledBL, OFF);
+  delay(500);
   if (clickState == ON) {
     cameraClick();
     Serial.println("click");
@@ -256,11 +295,12 @@ void doBRLights() {
   led_set(ledTL, OFF);
   led_set(ledBR, ON);
   led_set(ledBL, OFF);
+  delay(500);
   if (clickState == ON) {
     cameraClick();
     Serial.println("click");
   }
-  Serial.print("State == bottomright");
+  Serial.println("State = bottomright");
   lightState = bottomright;
 }
 
@@ -269,11 +309,12 @@ void doBLLights() {
   led_set(ledTL, OFF);
   led_set(ledBR, OFF);
   led_set(ledBL, ON);
+  delay(500);
   if (clickState == ON) {
     cameraClick();
     Serial.println("click");
   }
-  Serial.print("State == bottomright");
+  Serial.println("State = bottomleft");
   lightState = all;
 }
 
@@ -284,17 +325,17 @@ void setup2() {
   pinMode(ledPin2, OUTPUT); 
 }
 
-void loop () {
+void loop2 () {
   if (clickState == allShutter){
     digitalWrite(ledPin2, HIGH);             // light blinking quickly
     digitalWrite(ledPin2, LOW);
   }else if (clickState == oneShutter) {
-    digitalWrite(ledPin2, HIGH);
+   digitalWrite(ledPin2, HIGH);
     delay(400);                             //light blinking slowly
-    digitalWrite(ledPin2, LOW);
+   digitalWrite(ledPin2, LOW);
   }else if (clickState == noShutter) {
     digitalWrite(ledPin2, HIGH);                    //light always on
   }
 }
-/*
 
+*/
