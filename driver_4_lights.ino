@@ -1,57 +1,52 @@
+//Light machine logic
+
 /*
-  Blink
-  Turns on an LED on for one second, then off for one second, repeatedly.
+  State button (LED to Human)       meaning
+  0 Nothing (LED 1/sec blink)       Just looping looking for input
+  1 StepLights (LED 3/sec blink)    Can step through lights
+  2 ManualStepThrough (LED 10/sec)  When you push camera button, light on and picture
+  3 AutoStepThrough (LED on)        Goes through all lights and all pictures
 
-  Most Arduinos have an on-board LED you can control. On the UNO, MEGA and ZERO
-  it is attached to digital pin 13, on MKR1000 on pin 6. LED_BUILTIN is set to
-  the correct LED pin independent of which board is used.
-  If you want to know what pin the on-board LED is connected to on your Arduino model, check
-  the Technical Specs of your board  at https://www.arduino.cc/en/Main/Products
+  If you are in the middle of a state, pressing state returns you to state 0 (Nothing)
 
-  This example code is in the public domain.
+  Camera button: Push to take picture while in state
+  1 (StepLights) changes the lights
+  2 (ManualStepThrough) change the lights and camera
+  3 (AutoStepThrough) collect pictures with light automatically for all lights
 
-  modified 8 May 2014
-  by Scott Fitzgerald
-
-  modified 2 Sep 2016
-  by Arturo Guadalupi
-
-  modified 8 Sep 2016
-  by Colby Newman
 */
 
-// constants won't change. They're used here to
-// set pin numbers:
 const int pinButtonState = 8; // the number of the pushbutton pin
 const int pinButtonCamera = 10; //button for the camera
 const int ledPin = 13; // the number of the LED pin
+const int indicatorLed = 12; //the led that shows what state you are in on circuit board
 const int cameraShutter = 11;
-const int ledTR = 3;
-const int ledTL = 4;
-const int ledBR = 5;
-const int ledBL = 6;
+const int ledTR = 3;   //TR light on circut board
+const int ledTL = 4;   //TL light on cirut board
+const int ledBR = 5;   //BR light on circut board
+const int ledBL = 6;   //BL light on circut board
+const int ledAll = 10; // all the lights are ON (not on circut board)
+
+const int whichLightOn; //which of the 4 lights are on
 
 const int shutterLag = 50;
 const int shutterDelay = 100;
 const int ON = 1;
 const int OFF = 0;
-const int all = 10; // all lights ON
-const int topright = 20; // top right is ON
-const int topleft = 30;
-const int bottomleft = 40;
-const int bottomright = 50;
-const int noShutter = 0; // there is no shutter
-const int oneShutter = 1; // manual shutter
-const int allShutter = 2; // sequence of lights and shutter
+
+//for cameraButton
+const int stepLights = 1; // changes the lights with no pictures taken
+const int manualStepThrough = 2; // change the lights and camera
+const int autoStepThrough = 3; // collect pictures with light automatically for all lights in sequence
 
 // Variables will change:
 int ledState = HIGH; // the current state of the output pin
-int buttonPinState; // the current reading from the input pin
-int buttonCameraState = LOW; //so it does not start w/out button click
-int lastButtonPinState = LOW; // the previous reading from the input pin
-int lastButtonCameraState = LOW;
-int lightState = 0;
-int clickState = 0;
+int buttonState = HIGH; // the current reading from the input pin
+int buttonCamera = HIGH; //so it does not start w/out button click
+int lastButtonState = HIGH; // the previous reading from the input pin
+int lastButtonCamera = HIGH;
+int state = 0; //0 Do nothing, 1 StepLIghts, 2 ManualStepThrough, 3 AutoStepThrough
+int lightOnMode = 0; //0 no lights, 1 TR on, 2 TL on, 3 BR on, 4 BL on
 
 
 // the following variables are unsigned long's because the time, measured in miliseconds,
@@ -59,6 +54,7 @@ int clickState = 0;
 unsigned long lastStateDebounceTime = 0; // the last time the output pin was toggled
 unsigned long lastCameraDebounceTime = 0;
 unsigned long debounceDelay = 50; // the debounce time; increase if the output flickers
+unsigned long lastIndicatorLightChange = 0;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -68,133 +64,102 @@ void setup() {
   pinMode(ledTL, OUTPUT);
   pinMode(ledBR, OUTPUT);
   pinMode(ledBL, OUTPUT);
+  pinMode(indicatorLed, OUTPUT);
   pinMode(cameraShutter, OUTPUT); //camera shutter
   pinMode(pinButtonState, INPUT_PULLUP);
   pinMode(pinButtonCamera, INPUT_PULLUP);
-
+  lastIndicatorLightChange = millis();
   Serial.begin(115200);
-  lightState = all;
+  state = 0;
   // set initial LED state
   digitalWrite(ledPin, ledState);
 }
 
-// the loop function runs over and over again forever
-void loop() {
-  //  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-  //  delay(1000);                       // wait for a second
-  //  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-  //  delay(1000);                       // wait for a second
 
-  int reading;
-
-  reading = digitalRead(pinButtonCamera);   //reading input pin
-
-  // check to see if you just pressed the button
-  // (i.e. the input went from LOW to HIGH),  and you've waited
-  // long enough since the last press to ignore any noise:
-
-  // If the switch changed, due to noise or pressing:
-  if (reading != lastButtonCameraState) {
-    // reset the debouncing timer
-    lastCameraDebounceTime = millis();
+//If true, then buttonState is changed.
+bool debounceButtonState() {
+  bool debounced = false; //not a debounced button
+  int button = digitalRead(pinButtonState);
+  if ( button != lastButtonState) {
+    lastStateDebounceTime = millis(); //Just a timer
   }
-  if ((millis() - lastCameraDebounceTime) > debounceDelay) {
-    // whatever the reading is at, it's been there for longer
-    // than the debounce delay, so take it as the actual current state:
+  lastButtonState = button; //Reset the last button state
 
-    // if the button state has changed:
-    if (reading != buttonCameraState) {
-      buttonCameraState = reading;
-
-      // only toggle the LED if the new button state is HIGH
-      if (clickState == allShutter) {
-        doAllStates();
-        clickState = oneShutter;
-        Serial.println("allShutter");
-      }
-      
-      else if (clickState == oneShutter) {
-       // doManually();
-        clickState = noShutter;
-        Serial.println("oneShutter");
-      }
-      else if (clickState == noShutter) {
-        doNoShutter();
-        clickState = allShutter;
-        Serial.println("noShutter");
-      }
-      ledState = !ledState;
-      Serial.println("change cameraState");
-      // camera_set(cameraShutter);
+  if ((millis() - lastStateDebounceTime) > debounceDelay) { //enough time?
+    if (buttonState != button) {
+      buttonState = button; //Change buttonState if it is different and there's been enough time
+      debounced = true;
     }
   }
-
-
-  digitalWrite(ledPin, ledState);
-
-  lastButtonCameraState = reading;
-
-  // read the state of the switch into a local variable:
-  reading = digitalRead(pinButtonState);
-
-  // check to see if you just pressed the button
-  // (i.e. the input went from LOW to HIGH),  and you've waited
-  // long enough since the last press to ignore any noise:
-
-  // If the switch changed, due to noise or pressing:
-  if (reading != lastButtonPinState) {
-    // reset the debouncing timer
-    lastStateDebounceTime = millis();
-  }
-  if ((millis() - lastStateDebounceTime) > debounceDelay) {
-    // whatever the reading is at, it's been there for longer
-    // than the debounce delay, so take it as the actual current state:
-
-    // if the button state has changed:
-    if (reading != buttonPinState) {
-      buttonPinState = reading;
-      Serial.println("stateButton");
-
-      // only toggle the LED if the new button state is HIGH
-      if (buttonPinState == HIGH) {
-        ledState = !ledState;
-
-        if (clickState == oneShutter) {
-          doAllStates();
-          Serial.println ("allShutterlol") ;
-        } else if (lightState == doAllLights) {
-          doAllLights();
-          Serial.println("alllights");
-        } else if (lightState == doTRLights) {
-          doTRLights();
-          Serial.println("TRlights");
-        } else if (lightState == doTLLights) {
-          doTLLights();
-          Serial.println("TLlights");
-        } else if (lightState == doBRLights) {
-          doBRLights();
-          Serial.println("BRlights");
-        } else if (lightState == doBLLights) {
-          doBLLights();
-        } else {
-          lightState = all;
-        }
-      }
-    }
-  }
-
-  //  digitalWrite(3, HIGH);
-  //  delay(1000);
-  //  cameraClick();
-
-  // set the LED:
-  digitalWrite(ledPin, ledState);
-
-  // save the reading.  Next time through the loop,
-  // it'll be the lastButtonState:
-  lastButtonPinState = reading;
+  return debounced; //if true, state button has really changed
 }
-void cameraClick() {
+
+//If true, then buttonCamera is changed.
+bool debounceButtonCamera() {
+  bool debounced = false; //not a debounced button
+  int button = digitalRead(pinButtonCamera);
+  if ( button != lastButtonCamera) {
+    lastCameraDebounceTime = millis(); //Just a timer
+  }
+  lastButtonCamera = button; //Reset the last button state
+
+  if ((millis() - lastCameraDebounceTime) > debounceDelay) { //enough time?
+    if (buttonCamera != button) {
+      buttonCamera = button; //Change buttonState if it is different and there's been enough time
+      debounced = true;
+    }
+  } //long enough to check
+  return debounced; //if true, camera button has really changed
+}
+
+
+
+unsigned long handleIndicatorLED(int state, unsigned long last_indicator_change) {
+  if (state == 0) { //Do nothing
+    if (millis() - last_indicator_change > 1000) { //1x/sec
+      Serial.println("sec");
+      if (HIGH == digitalRead(indicatorLed)) {
+        digitalWrite(indicatorLed, LOW);
+      } else {
+        digitalWrite(indicatorLed, HIGH);
+      }
+      last_indicator_change = millis();
+    }
+  } else if (state == 1) { //StepLights state
+    if (millis() - last_indicator_change > 300) { //3x/sec
+      if (HIGH == digitalRead(indicatorLed)) {
+        digitalWrite(indicatorLed, LOW);
+      } else {
+        digitalWrite(indicatorLed, HIGH);
+      }
+      last_indicator_change = millis();
+    }
+  } else if (state == 2) { //ManualStepThrough state
+    if (millis() - last_indicator_change > 100) { //10x/sec
+      if(HIGH == digitalRead(indicatorLed)) {
+        digitalWrite(indicatorLed, LOW);
+      } else {
+        digitalWrite(indicatorLed, HIGH);
+      }
+      last_indicator_change = millis();
+    }
+  } else if (state == 3) { //AutoStepThrough keep on
+      if(LOW == digitalRead(indicatorLed)) {
+        digitalWrite(indicatorLed, HIGH);  //keeps the indicator LED on
+      }
+      last_indicator_change = millis();
+  }
+  return last_indicator_change;
+}
+
+
+void resetSystemState() {
+  Serial.println("I'm resetting variables and hardware to starting configuration");
+  doNoLights(); // Turn all lights off
+  lightOnMode = 0;
+}
+
+void takePicture() {   //shutter clicks and takes a picture
   digitalWrite(cameraShutter, LOW);
   delay(shutterLag);
   Serial.println("take my picture");
@@ -202,7 +167,6 @@ void cameraClick() {
   delay(shutterDelay);
   digitalWrite(cameraShutter, LOW);
   delay(shutterLag);
-
 }
 
 void led_set(uint8_t number, uint8_t setting) {
@@ -214,52 +178,24 @@ void led_set(uint8_t number, uint8_t setting) {
 }
 
 
-void doAllStates() {
-  doAllLights();
-  //cameraClick();
-  delay(600);
-  clickState = ON; 
-  doTRLights();
-  delay(600);
-  doTLLights();
-  delay(600);
-  doBRLights();
-  delay(600);
-  doBLLights();
+void doNoLights() {
+  led_set(ledTR, OFF);
+  led_set(ledTL, OFF);
+  led_set(ledBR, OFF);
+  led_set(ledBL, OFF);
+  Serial.println("Turning all lights off");
 }
 
-/*void doManually() {
-  doAllLights();
-  pinMode(pinButtonState, INPUT_PULLUP);
-  doTRLights();
-  pinMode(pinButtonState, INPUT_PULLUP);
-  doTLLights();
-  pinMode(pinButtonState, INPUT_PULLUP);
-  doBRLights();
-  pinMode(pinButtonState, INPUT_PULLUP);
-  doBLLights();
-}
-*/
-void doNoShutter() {
-  clickState = OFF;
-  doAllLights();
-  doTRLights();
-  doTLLights();
-  doBRLights();
-  doBLLights();
-}
 void doAllLights() {
   led_set(ledTR, ON);
   led_set(ledTL, ON);
   led_set(ledBR, ON);
   led_set(ledBL, ON);
   delay(500);
-  if (clickState == ON) {
-    cameraClick();
-    Serial.println("click");
+  if (buttonCamera == ON) {
+    takePicture();
+    Serial.println("picture taken for all lights");
   }
-  Serial.println("State = all");
-  lightState = topright;
 }
 
 void doTRLights() {
@@ -268,12 +204,10 @@ void doTRLights() {
   led_set(ledBR, OFF);
   led_set(ledBL, OFF);
   delay (500);
-  if (clickState == ON) {
-    cameraClick();
-    Serial.println("click");
+  if (buttonCamera == ON) {
+    takePicture();
+    Serial.println("picture taken for TR");
   }
-  Serial.println("State = topright");
-  lightState = topleft;
 }
 
 void doTLLights() {
@@ -282,12 +216,10 @@ void doTLLights() {
   led_set(ledBR, OFF);
   led_set(ledBL, OFF);
   delay(500);
-  if (clickState == ON) {
-    cameraClick();
-    Serial.println("click");
+  if (buttonCamera == ON) {
+    takePicture();
+    Serial.println("picture taken for TL");
   }
-  Serial.println("State = topleft");
-  lightState = bottomleft;
 }
 
 void doBRLights() {
@@ -296,12 +228,10 @@ void doBRLights() {
   led_set(ledBR, ON);
   led_set(ledBL, OFF);
   delay(500);
-  if (clickState == ON) {
-    cameraClick();
-    Serial.println("click");
+  if (buttonCamera == ON) {
+    takePicture();
+    Serial.println("picture taken for BR");
   }
-  Serial.println("State = bottomright");
-  lightState = bottomright;
 }
 
 void doBLLights() {
@@ -310,32 +240,106 @@ void doBLLights() {
   led_set(ledBR, OFF);
   led_set(ledBL, ON);
   delay(500);
-  if (clickState == ON) {
-    cameraClick();
-    Serial.println("click");
-  }
-  Serial.println("State = bottomleft");
-  lightState = all;
-}
-
-/*
-int ledPin2 = 12;    //led connected to digital pin 12
-
-void setup2() {
-  pinMode(ledPin2, OUTPUT); 
-}
-
-void loop2 () {
-  if (clickState == allShutter){
-    digitalWrite(ledPin2, HIGH);             // light blinking quickly
-    digitalWrite(ledPin2, LOW);
-  }else if (clickState == oneShutter) {
-   digitalWrite(ledPin2, HIGH);
-    delay(400);                             //light blinking slowly
-   digitalWrite(ledPin2, LOW);
-  }else if (clickState == noShutter) {
-    digitalWrite(ledPin2, HIGH);                    //light always on
+  if (buttonCamera == ON) {
+    takePicture();
+    Serial.println("picture taken for BL");
   }
 }
 
-*/
+
+///////////////////////////////////////////////////... main loop
+void loop() {
+
+  //There is probably a function where you use state and millis() 
+  //    to decide when to turn indicateor light on, of or stay on
+  //    depending on state and timer.
+  lastIndicatorLightChange = handleIndicatorLED (state, lastIndicatorLightChange);
+
+  //Check state change
+  bool stateChange = debounceButtonState();
+  if (stateChange && buttonState == LOW) {
+    state = (state + 1) % 4; //cycle state 0, 1, 2, 3
+    lastIndicatorLightChange = handleIndicatorLED(state, lastIndicatorLightChange); //Indicate by IndicatorLED what state we are in
+    Serial.print("State = ");
+    Serial.println(state);
+    resetSystemState(); //todo set state to starting state again
+  }
+
+  //Handle the states
+  if (state == 1) { //stepping lights
+    bool cameraChange = debounceButtonCamera();
+    if (cameraChange && buttonCamera == LOW) {
+      //  ??? Needs mod 6, 0-5 'states' no, all, tr,tl,bt,bl
+      lightOnMode = (lightOnMode + 1) % 6; //0 no lights, 1 all, 2 TR on, 3 TL on, 4 BR on, 5 BL on
+      switch (lightOnMode) {
+        case 0:
+          doNoLights();
+          break;
+        case 1:
+          doAllLights();
+          break;
+        case 2:
+          doTRLights();
+          break;
+        case 3:
+          doTLLights();
+          break;
+        case 4:
+          doBRLights();
+          break;
+        case 5:
+          doBLLights();
+          break;
+      } //end switch lightOnMode
+    }
+  } else if (state == 2) { //Manual step light and camera
+    bool cameraChange = debounceButtonCamera();
+    if (cameraChange && buttonCamera == LOW) {  //step through lights manually with camera shutter
+      // ??? again mod 6
+      lightOnMode = (lightOnMode + 1) % 5; //0 no lights, 1 all, 2 TR on, 3 TL on, 4 BR on, 5 BL on
+      switch (lightOnMode) {
+        case 0:
+          doNoLights();
+          break;
+        case 1:
+          doAllLights();
+          takePicture();
+          break;
+        case 2:
+          doTRLights();
+          takePicture();
+          break;
+        case 3:
+          doTLLights();
+          takePicture();
+          break;
+        case 4:
+          doBRLights();
+          takePicture();
+          break;
+        case 5:
+          doBLLights();
+          takePicture();
+          break;
+         
+      } //end switch lightOnMode
+    }
+  } else if (state == 3) { //auto step light and camera
+    bool cameraChange = debounceButtonCamera();
+    if (cameraChange && buttonCamera == LOW) { //automaticaly step through the lights while taking pics
+      doAllLights();
+      takePicture();
+      doTRLights();
+      takePicture();
+      doTLLights();
+      takePicture();
+      doBRLights();
+      takePicture();
+      doBLLights();
+      takePicture();
+      doNoLights();
+    }
+  }
+}
+////////////////////////////////////////////////////////////////...end main loop
+
