@@ -296,7 +296,7 @@ void loop() {
     bool cameraChange = debounceButtonCamera();
     if (cameraChange && buttonCamera == LOW) {  //step through lights manually with camera shutter
       // ??? again mod 6
-      lightOnMode = (lightOnMode + 1) % 5; //0 no lights, 1 all, 2 TR on, 3 TL on, 4 BR on, 5 BL on
+      lightOnMode = (lightOnMode + 1) % 6; //0 no lights, 1 all, 2 TR on, 3 TL on, 4 BR on, 5 BL on
       switch (lightOnMode) {
         case 0:
           doNoLights();
@@ -328,14 +328,19 @@ void loop() {
     bool cameraChange = debounceButtonCamera();
     if (cameraChange && buttonCamera == LOW) { //automaticaly step through the lights while taking pics
       doAllLights();
+      delay(200);
       takePicture();
       doTRLights();
+      delay(200);
       takePicture();
       doTLLights();
+      delay(200);
       takePicture();
       doBRLights();
+      delay(200);
       takePicture();
       doBLLights();
+      delay(200);
       takePicture();
       doNoLights();
     }
